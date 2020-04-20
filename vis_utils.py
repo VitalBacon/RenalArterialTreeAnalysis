@@ -3,7 +3,20 @@ import vtk
 from vtk.util import numpy_support
 from scipy.ndimage import zoom
 
-def visualize_volume(np_volume, scale=0.1, t=(2, 1, 0)):
+
+def load_volume(file, dims_order=(2, 1, 0), scale=None):
+    raw_arr = np.fromfile(file, dtype=np.uint8)
+    volume_dims_str = file.split('_')[-1].split('.')[0].split('x')
+    volume_dims = [int(volume_dims_str[i]) for i in dims_order]
+    arr = raw_arr.reshape(volume_dims)
+    
+    if scale is not None:
+        arr = zoom(arr, scale, order=0)
+        
+    return arr
+
+
+def visualize_volume(np_volume, scale=1, t=(2, 1, 0)):
     
     np_volume = zoom(np_volume, scale, order=1)
     flat_volume = np_volume.transpose(t).flatten()
