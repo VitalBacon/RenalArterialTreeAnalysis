@@ -25,6 +25,12 @@ def get_transform_function(mid_point, delta, central_value, margin_value):
     transform_function.AddPoint(mid_point + delta, margin_value)
     return transform_function
 
+def get_color_function(mid_point, primary_color):
+    volumeColor = vtk.vtkColorTransferFunction()
+    volumeColor.AddRGBPoint(mid_point - 50, *(0, 0, 0))
+    volumeColor.AddRGBPoint(mid_point, *primary_color)
+    volumeColor.AddRGBPoint(mid_point + 50, *(0, 0, 0))
+    return volumeColor
 
 class SliderWrapper:
     def __init__(self, title_text, value_range, initial_value, position):
@@ -65,7 +71,7 @@ class VolumeVisualizer:
             'opacity_function_width': (data_scalar_range[1] - data_scalar_range[0]) / 2.
         }
 
-    def visualize(self, scale=1., interpolation_order=0):
+    def visualize(self, scale=1., interpolation_order=0, primary_color=None):
         volume = zoom(self._volume, scale, order=interpolation_order)
 
         flat_volume = volume.transpose((2, 1, 0)).flatten()
@@ -86,6 +92,8 @@ class VolumeVisualizer:
         # --- actor
         actor = vtk.vtkVolume()
         actor.SetMapper(mapper)
+        if primary_color is not None:
+            actor.GetProperty().SetColor(0, get_color_function(self._dynamic_properties['opacity_function_midpoint'], primary_color))
 
         # --- renderer
         renderer = vtk.vtkRenderer()
@@ -111,6 +119,8 @@ class VolumeVisualizer:
                     central_value=self._dynamic_properties['opacity_function_max']
                 )
                 actor.GetProperty().SetScalarOpacity(0, transform_function)
+                if primary_color is not None:
+                    actor.GetProperty().SetColor(0, get_color_function(self._dynamic_properties['opacity_function_midpoint'], primary_color))
                 render_window.Render()
 
             return callback
@@ -118,7 +128,7 @@ class VolumeVisualizer:
         midpoint_slider_widget = SliderWrapper(
             title_text='opacity function midpoint',
             value_range=self._data_scalar_range,
-            initial_value=(self._data_scalar_range[0] + self._data_scalar_range[1]) / 2.,
+            initial_value=self._dynamic_properties['opacity_function_midpoint'],
             position=((.7, .1), (.9, .1))
         ).get_widget(interactor)
         midpoint_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_midpoint'))
@@ -126,7 +136,7 @@ class VolumeVisualizer:
         width_slider_widget = SliderWrapper(
             title_text='opacity function width',
             value_range=(0, self._data_scalar_range[1] - self._data_scalar_range[0]),
-            initial_value=(self._data_scalar_range[0] + self._data_scalar_range[1]) / 2.,
+            initial_value=self._dynamic_properties['opacity_function_width'],
             position=((.7, .25), (.9, .25))
         ).get_widget(interactor)
         width_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_width'))
@@ -139,6 +149,15 @@ class VolumeVisualizer:
         ).get_widget(interactor)
         opacity_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_max'))
 
+        # --- start
+        transform_function = get_transform_function(
+            mid_point=self._dynamic_properties['opacity_function_midpoint'],
+            delta=self._dynamic_properties['opacity_function_width'] / 2.,
+            margin_value=0.,
+            central_value=self._dynamic_properties['opacity_function_max']
+        )
+        actor.GetProperty().SetScalarOpacity(0, transform_function)
+        render_window.Render()
         style = vtk.vtkInteractorStyleTrackballCamera()
         interactor.SetInteractorStyle(style)
         interactor.Initialize()
