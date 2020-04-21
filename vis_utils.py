@@ -61,7 +61,7 @@ class VolumeVisualizer:
         self._volume = volume
 
         if data_scalar_range == 'auto':
-            data_scalar_range = (int(volume.min()), int(volume.max() + 1))
+            data_scalar_range = (int(volume.min()), int(volume.max()))
 
         self._data_scalar_range = data_scalar_range
 
