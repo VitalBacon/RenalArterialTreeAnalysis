@@ -25,12 +25,14 @@ def get_transform_function(mid_point, delta, central_value, margin_value):
     transform_function.AddPoint(mid_point + delta, margin_value)
     return transform_function
 
+
 def get_color_function(mid_point, primary_color):
     volumeColor = vtk.vtkColorTransferFunction()
     volumeColor.AddRGBPoint(mid_point - 50, *(0, 0, 0))
     volumeColor.AddRGBPoint(mid_point, *primary_color)
     volumeColor.AddRGBPoint(mid_point + 50, *(0, 0, 0))
     return volumeColor
+
 
 class SliderWrapper:
     def __init__(self, title_text, value_range, initial_value, position):
@@ -43,7 +45,6 @@ class SliderWrapper:
         slider_rep.SetMaximumValue(value_range[1])
         slider_rep.SetValue(initial_value)
         slider_rep.SetTitleText(title_text)
-
         self._slider_rep = slider_rep
 
     def get_widget(self, interactor):
@@ -52,13 +53,13 @@ class SliderWrapper:
         widget.SetRepresentation(self._slider_rep)
         widget.SetAnimationModeToAnimate()
         widget.EnabledOn()
-
         return widget
 
 
 class VolumeVisualizer:
-    def __init__(self, volume, data_scalar_range='auto'):
+    def __init__(self, volume, binary=True, data_scalar_range='auto'):
         self._volume = volume
+        self._binary = binary
 
         if data_scalar_range == 'auto':
             data_scalar_range = (int(volume.min()), int(volume.max()))
@@ -71,9 +72,8 @@ class VolumeVisualizer:
             'opacity_function_width': (data_scalar_range[1] - data_scalar_range[0]) / 2.
         }
 
-    def visualize(self, scale=1., interpolation_order=0, primary_color=None):
+    def visualize(self, scale=1, interpolation_order=0, primary_color=None):
         volume = zoom(self._volume, scale, order=interpolation_order)
-
         flat_volume = volume.transpose((2, 1, 0)).flatten()
 
         # --- data_importer
@@ -92,8 +92,6 @@ class VolumeVisualizer:
         # --- actor
         actor = vtk.vtkVolume()
         actor.SetMapper(mapper)
-        if primary_color is not None:
-            actor.GetProperty().SetColor(0, get_color_function(self._dynamic_properties['opacity_function_midpoint'], primary_color))
 
         # --- renderer
         renderer = vtk.vtkRenderer()
@@ -108,55 +106,64 @@ class VolumeVisualizer:
         interactor = vtk.vtkRenderWindowInteractor()
         interactor.SetRenderWindow(render_window)
 
-        def slider_callback_wrapper(property_name):
-            def callback(caller, ev):
-                value = caller.GetSliderRepresentation().GetValue()
-                self._dynamic_properties[property_name] = value
-                transform_function = get_transform_function(
-                    mid_point=self._dynamic_properties['opacity_function_midpoint'],
-                    delta=self._dynamic_properties['opacity_function_width'] / 2.,
-                    margin_value=0.,
-                    central_value=self._dynamic_properties['opacity_function_max']
-                )
-                actor.GetProperty().SetScalarOpacity(0, transform_function)
-                if primary_color is not None:
-                    actor.GetProperty().SetColor(0, get_color_function(self._dynamic_properties['opacity_function_midpoint'], primary_color))
-                render_window.Render()
+        if self._binary:
+            actor.GetProperty().SetScalarOpacity(0, get_transform_function(1, 0.5, 1, 0))
+            color_function = get_color_function(1, primary_color if primary_color is not None else (255, 255, 255))
+            actor.GetProperty().SetColor(0, color_function)
+        else:
+            def slider_callback_wrapper(property_name):
+                def callback(caller, _):
+                    value = caller.GetSliderRepresentation().GetValue()
+                    self._dynamic_properties[property_name] = value
+                    transform_function = get_transform_function(
+                        mid_point=self._dynamic_properties['opacity_function_midpoint'],
+                        delta=self._dynamic_properties['opacity_function_width'] / 2.,
+                        margin_value=0.,
+                        central_value=self._dynamic_properties['opacity_function_max']
+                    )
+                    actor.GetProperty().SetScalarOpacity(0, transform_function)
+                    if primary_color is not None:
+                        color_function = get_color_function(self._dynamic_properties['opacity_function_midpoint'], primary_color)
+                        actor.GetProperty().SetColor(0, color_function)
+                    render_window.Render()
+                return callback
 
-            return callback
+            midpoint_slider_widget = SliderWrapper(
+                title_text='opacity function midpoint',
+                value_range=self._data_scalar_range,
+                initial_value=self._dynamic_properties['opacity_function_midpoint'],
+                position=((.7, .1), (.9, .1))
+            ).get_widget(interactor)
+            midpoint_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_midpoint'))
 
-        midpoint_slider_widget = SliderWrapper(
-            title_text='opacity function midpoint',
-            value_range=self._data_scalar_range,
-            initial_value=self._dynamic_properties['opacity_function_midpoint'],
-            position=((.7, .1), (.9, .1))
-        ).get_widget(interactor)
-        midpoint_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_midpoint'))
+            width_slider_widget = SliderWrapper(
+                title_text='opacity function width',
+                value_range=(0, self._data_scalar_range[1] - self._data_scalar_range[0]),
+                initial_value=self._dynamic_properties['opacity_function_width'],
+                position=((.7, .25), (.9, .25))
+            ).get_widget(interactor)
+            width_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_width'))
 
-        width_slider_widget = SliderWrapper(
-            title_text='opacity function width',
-            value_range=(0, self._data_scalar_range[1] - self._data_scalar_range[0]),
-            initial_value=self._dynamic_properties['opacity_function_width'],
-            position=((.7, .25), (.9, .25))
-        ).get_widget(interactor)
-        width_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_width'))
+            opacity_slider_widget = SliderWrapper(
+                title_text='max opacity',
+                value_range=(0., 1.),
+                initial_value=1.,
+                position=((.7, .4), (.9, .4))
+            ).get_widget(interactor)
+            opacity_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_max'))
 
-        opacity_slider_widget = SliderWrapper(
-            title_text='max opacity',
-            value_range=(0., 1.),
-            initial_value=1.,
-            position=((.7, .4), (.9, .4))
-        ).get_widget(interactor)
-        opacity_slider_widget.AddObserver('InteractionEvent', slider_callback_wrapper('opacity_function_max'))
+            transform_function = get_transform_function(
+                mid_point=self._dynamic_properties['opacity_function_midpoint'],
+                delta=self._dynamic_properties['opacity_function_width'] / 2.,
+                margin_value=0.,
+                central_value=self._dynamic_properties['opacity_function_max']
+            )
+            actor.GetProperty().SetScalarOpacity(0, transform_function)
+            if primary_color is not None:
+                color_function = get_color_function(self._dynamic_properties['opacity_function_midpoint'], primary_color)
+                actor.GetProperty().SetColor(0, color_function)
 
         # --- start
-        transform_function = get_transform_function(
-            mid_point=self._dynamic_properties['opacity_function_midpoint'],
-            delta=self._dynamic_properties['opacity_function_width'] / 2.,
-            margin_value=0.,
-            central_value=self._dynamic_properties['opacity_function_max']
-        )
-        actor.GetProperty().SetScalarOpacity(0, transform_function)
         render_window.Render()
         style = vtk.vtkInteractorStyleTrackballCamera()
         interactor.SetInteractorStyle(style)
