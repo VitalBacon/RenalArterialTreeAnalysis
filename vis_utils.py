@@ -109,7 +109,7 @@ class VolumeVisualizer:
 
         if self._binary:
             actor.GetProperty().SetScalarOpacity(0, get_transform_function(1, 0.5, 1, 0))
-            color_function = get_color_function(1, primary_color if primary_color is not None else (255, 255, 255))
+            color_function = get_color_function(1, primary_color if primary_color is not None else (1, 1, 1))
             actor.GetProperty().SetColor(0, color_function)
         else:
             def slider_callback_wrapper(property_name):
