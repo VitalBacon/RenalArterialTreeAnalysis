@@ -186,7 +186,7 @@ class ColorMapVisualizer:
             'opacity_function_width': (self._data_scalar_range[1] - self._data_scalar_range[0]) / 2.
         }
 
-    def visualize(self, scale=1, interpolation_order=0, interactive=True):
+    def visualize(self, scale=1, interpolation_order=0, interactive=True, gradient=False):
         volume = zoom(self._color_map, scale, order=interpolation_order)
         flat_volume = volume.transpose((2, 1, 0)).flatten()
 
@@ -206,7 +206,7 @@ class ColorMapVisualizer:
         # --- actor
         actor = vtk.vtkVolume()
         actor.SetMapper(mapper)
-        actor.GetProperty().SetColor(0, self.get_rainbow_color_function())
+        actor.GetProperty().SetColor(0, self.get_rainbow_color_function(gradient))
 
         # --- renderer
         renderer = vtk.vtkRenderer()
@@ -286,10 +286,17 @@ class ColorMapVisualizer:
             transfer_function.AddPoint(i, central_value)
         return transfer_function
 
-    def get_rainbow_color_function(self):
+    def get_rainbow_color_function(self, gradient):
         colors = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1)]
         volume_color = vtk.vtkColorTransferFunction()
         volume_color.AddRGBPoint(0, *(0, 0, 0))
-        for i in range(1, self._data_scalar_range[1] + 1):
-            volume_color.AddRGBPoint(i, *(colors[i % len(colors)]))
+        
+        if gradient:
+            volume_color.AddRGBPoint(1, *(1, 1, 0))
+            volume_color.AddRGBPoint(self._data_scalar_range[1], *(1, 0, 0))
+            
+        else:
+            for i in range(1, self._data_scalar_range[1] + 1):
+                volume_color.AddRGBPoint(i, *(colors[i % len(colors)]))
+                
         return volume_color
