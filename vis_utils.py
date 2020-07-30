@@ -292,8 +292,8 @@ class ColorMapVisualizer:
         volume_color.AddRGBPoint(0, *(0, 0, 0))
         
         if gradient:
-            volume_color.AddRGBPoint(1, *(1, 1, 0))
-            volume_color.AddRGBPoint(self._data_scalar_range[1], *(1, 0, 0))
+            volume_color.AddRGBPoint(1, *(1, 0, 0))
+            volume_color.AddRGBPoint(self._data_scalar_range[1], *(0, 0, 1))
             
         else:
             for i in range(1, self._data_scalar_range[1] + 1):
